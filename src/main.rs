@@ -1,5 +1,6 @@
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use std::collections::HashSet;
 
 const CELL_COLOR_DEAD: Color = Color::srgb(0.2, 0.2, 0.2);
@@ -24,11 +25,19 @@ struct NextAlive;
 #[derive(Resource)]
 struct Paused(bool);
 
+#[derive(Component)]
+struct MainCamera;
+
+#[derive(Resource)]
+struct CursorWorldPos(Option<Vec2>);
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .insert_resource(Paused(true))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
+        .insert_resource(CursorWorldPos(None))
+        .insert_resource(Time::<Fixed>::from_seconds(0.25))
         .add_systems(Startup, setup)
         .add_systems(
             FixedUpdate,
@@ -39,12 +48,19 @@ fn main() {
             )
                 .chain(),
         )
-        .add_systems(Update, (update_cell_color, toggle_pause, handle_cell_click))
+        .add_systems(
+            Update,
+            (
+                update_cell_color,
+                toggle_pause,
+                (get_cursor_world_pos, handle_cell_click).chain(),
+            ),
+        )
         .run();
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2d);
+    commands.spawn((Camera2d, MainCamera));
     build_grid(commands, GRID_SIZE);
 }
 
@@ -197,33 +213,45 @@ fn clear_next_state(mut commands: Commands, query: Query<Entity, With<NextAlive>
     }
 }
 
-fn handle_cell_click(
-    mut commands: Commands,
-    windows: Query<&Window>,
-    buttons: Res<ButtonInput<MouseButton>>,
-    camera_query: Query<(&Camera, &GlobalTransform)>,
-    mut query: Query<(Entity, &Transform, &Position, Option<&Alive>)>,
+fn get_cursor_world_pos(
+    mut cursor_world_pos: ResMut<CursorWorldPos>,
+    primary_window: Single<&Window, With<PrimaryWindow>>,
+    q_camera: Single<(&Camera, &GlobalTransform)>,
 ) {
-    let window = windows.single();
-    let (camera, camera_transform) = camera_query.single();
+    let (camera, camera_transform) = *q_camera;
 
-    if !buttons.just_pressed(MouseButton::Left) {
+    cursor_world_pos.0 = primary_window.cursor_position().and_then(|cursor_pos| {
+        camera
+            .viewport_to_world_2d(camera_transform, cursor_pos)
+            .ok()
+    });
+}
+
+fn handle_cell_click(
+    cursor_world_pos: Res<CursorWorldPos>,
+    query: Query<(Entity, &Position, Option<&Alive>)>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    mut commands: Commands,
+) {
+    if !mouse_buttons.just_pressed(MouseButton::Left) {
         return;
     }
 
-    if let Some(cursor_pos) = window
-        .cursor_position()
-        .and_then(|pos| camera.viewport_to_world(camera_transform, pos))
-        .map(|ray| ray.origin.truncate())
-    {
-        for (entity, transform, _pos, alive) in query.iter_mut() {
-            let cell_pos = transform.translation.truncate();
-            let half_size = CELL_SIZE / 2.0;
+    let Some(cursor_pos) = cursor_world_pos.0 else {
+        return;
+    };
 
-            let in_bounds = cursor_pos.x >= cell_pos.x - half_size.x
-                && cursor_pos.x <= cell_pos.x + half_size.x
-                && cursor_pos.y >= cell_pos.y - half_size.y
-                && cursor_pos.y <= cell_pos.y + half_size.y;
+    let grid_x = (cursor_pos.x / CELL_PADDING as f32).floor() as isize;
+    let grid_y = (cursor_pos.y / CELL_PADDING as f32).floor() as isize;
+
+    for (cell, pos, alive) in query.iter() {
+        if pos.x == grid_x && pos.y == grid_y {
+            if alive.is_some() {
+                commands.entity(cell).remove::<Alive>();
+            } else {
+                commands.entity(cell).insert(Alive);
+            }
+            break;
         }
     }
 }
