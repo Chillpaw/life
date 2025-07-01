@@ -1,3 +1,4 @@
+use bevy::dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin};
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -31,9 +32,28 @@ struct MainCamera;
 #[derive(Resource)]
 struct CursorWorldPos(Option<Vec2>);
 
+struct OverlayColor;
+
+impl OverlayColor {
+    const RED: Color = Color::srgb(1.0, 1.0, 1.0);
+    const GREEN: Color = Color::srgb(0.0, 1.0, 0.0);
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(FpsOverlayPlugin {
+            config: FpsOverlayConfig {
+                text_config: TextFont {
+                    font_size: 12.0,
+                    font: default(),
+                    ..default()
+                },
+                text_color: OverlayColor::GREEN,
+                enabled: true,
+                refresh_interval: core::time::Duration::from_millis(100),
+            },
+        })
         .insert_resource(Paused(true))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(CursorWorldPos(None))
@@ -170,20 +190,20 @@ fn simulate(mut commands: Commands, query: Query<(Entity, &Position, Option<&Ali
         if let Some(_) = alive {
             if neighbours < 2 || neighbours > 3 {
                 commands.entity(cell).remove::<NextAlive>();
-                println!(
+                /*println!(
                     "Changed cell: {:?} to dead because alive with {} neighbours.",
                     pos, neighbours
-                );
+                );*/
             } else {
                 commands.entity(cell).insert(NextAlive);
-                println!(
+                /*println!(
                     "Kept cell: {:?} alive because {} neighbours",
                     pos, neighbours
-                );
+                );*/
             }
         } else if neighbours == 3 {
             commands.entity(cell).insert(NextAlive);
-            println!("Changed cell: {:?} to dead.", pos);
+            //println!("Changed cell: {:?} to dead.", pos);
         }
     }
 }
