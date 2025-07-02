@@ -9,7 +9,7 @@ const CELL_COLOR_ALIVE: Color = Color::srgb(1.0, 1.0, 1.0);
 const BACKGROUND_COLOR: Color = Color::srgb(0.0, 0.0, 0.0);
 const CELL_SIZE: Vec2 = Vec2::splat(10.0);
 const CELL_PADDING: isize = 10;
-const GRID_SIZE: isize = 20;
+const GRID_SIZE: isize = 30;
 
 #[derive(Component, PartialEq, Eq, Debug, Hash, Copy, Clone)]
 struct Position {
@@ -153,8 +153,8 @@ fn assign_sample_lives(mut commands: Commands, query: Query<(Entity, &Position)>
 
 fn update_cell_color(mut query: Query<(&mut Sprite, &Position, Option<&Alive>)>) {
     for (mut cell, _pos, alive) in query.iter_mut() {
-        if let Some(_) = alive {
-            cell.color = Color::srgb(1.0, 1.0, 0.0);
+        if let Some(alive) = alive {
+            cell.color = Color::srgb(1.0, 1.0 - alive.age, 0.0);
         } else {
             cell.color = CELL_COLOR_DEAD;
         }
@@ -164,6 +164,7 @@ fn update_cell_color(mut query: Query<(&mut Sprite, &Position, Option<&Alive>)>)
 fn update_cell_age(mut query: Query<&mut Alive>) {
     for mut alive in query.iter_mut() {
         alive.age += 0.1;
+        alive.age = alive.age.clamp(0.0, 1.0);
     }
 }
 fn simulate(mut commands: Commands, query: Query<(Entity, &Position, Option<&Alive>)>) {
