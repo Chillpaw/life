@@ -8,8 +8,8 @@ const CELL_COLOR_DEAD: Color = Color::srgb(0.2, 0.2, 0.2);
 const CELL_COLOR_ALIVE: Color = Color::srgb(1.0, 1.0, 1.0);
 const BACKGROUND_COLOR: Color = Color::srgb(0.0, 0.0, 0.0);
 const CELL_SIZE: Vec2 = Vec2::splat(10.0);
-const CELL_PADDING: isize = 15;
-const GRID_SIZE: isize = 10;
+const CELL_PADDING: isize = 10;
+const GRID_SIZE: isize = 20;
 
 #[derive(Component, PartialEq, Eq, Debug, Hash, Copy, Clone)]
 struct Position {
@@ -18,7 +18,9 @@ struct Position {
 }
 
 #[derive(Component)]
-struct Alive;
+struct Alive {
+    age: f32,
+}
 
 #[derive(Component)]
 struct NextAlive;
@@ -64,6 +66,7 @@ fn main() {
             (
                 simulate.run_if(not(paused)),
                 apply_next_state.run_if(not(paused)),
+                update_cell_age.run_if(not(paused)),
                 clear_next_state.run_if(not(paused)),
             )
                 .chain(),
@@ -139,7 +142,7 @@ fn assign_sample_lives(mut commands: Commands, query: Query<(Entity, &Position)>
             if value == 1 {
                 for (entity, pos) in query.iter() {
                     if pos.x == x as isize && pos.y == y as isize {
-                        commands.entity(entity).insert(Alive);
+                        commands.entity(entity).insert(Alive { age: 0.0 });
                         break;
                     }
                 }
@@ -151,13 +154,18 @@ fn assign_sample_lives(mut commands: Commands, query: Query<(Entity, &Position)>
 fn update_cell_color(mut query: Query<(&mut Sprite, &Position, Option<&Alive>)>) {
     for (mut cell, _pos, alive) in query.iter_mut() {
         if let Some(_) = alive {
-            cell.color = CELL_COLOR_ALIVE;
+            cell.color = Color::srgb(1.0, 1.0, 0.0);
         } else {
             cell.color = CELL_COLOR_DEAD;
         }
     }
 }
 
+fn update_cell_age(mut query: Query<&mut Alive>) {
+    for mut alive in query.iter_mut() {
+        alive.age += 0.1;
+    }
+}
 fn simulate(mut commands: Commands, query: Query<(Entity, &Position, Option<&Alive>)>) {
     let alive_positions: HashSet<Position> = query
         .iter()
@@ -215,7 +223,7 @@ fn apply_next_state(
     for (cell, alive, next_alive) in query.iter() {
         match (alive.is_some(), next_alive.is_some()) {
             (false, true) => {
-                commands.entity(cell).insert(Alive);
+                commands.entity(cell).insert(Alive { age: 0.0 });
                 //println!("Changed cell: {} to alive", cell);
             }
             (true, false) => {
@@ -261,15 +269,19 @@ fn handle_cell_click(
         return;
     };
 
-    let grid_x = (cursor_pos.x / CELL_PADDING as f32).floor() as isize;
-    let grid_y = (cursor_pos.y / CELL_PADDING as f32).floor() as isize;
+    println!("Mouse click: {:?}", cursor_pos);
+
+    let grid_x = (cursor_pos.x / CELL_PADDING as f32).round() as isize;
+    println!("Grid x: {}", grid_x);
+    let grid_y = (cursor_pos.y / CELL_PADDING as f32).round() as isize;
+    println!("Grid y: {}", grid_y);
 
     for (cell, pos, alive) in query.iter() {
         if pos.x == grid_x && pos.y == grid_y {
             if alive.is_some() {
                 commands.entity(cell).remove::<Alive>();
             } else {
-                commands.entity(cell).insert(Alive);
+                commands.entity(cell).insert(Alive { age: 0.0 });
             }
             break;
         }
